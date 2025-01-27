@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: client
+  redis:
+    host: localhost
+    port: 55001
+    database: 6
+server:
+  port: 8080
