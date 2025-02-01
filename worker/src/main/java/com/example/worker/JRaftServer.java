@@ -1,10 +1,10 @@
 package com.example.worker;
 
-import com.alipay.sofa.jraft.RaftGroupService;
 import com.alipay.sofa.jraft.Node;
+import com.alipay.sofa.jraft.RaftGroupService;
 import com.alipay.sofa.jraft.conf.Configuration;
-import com.alipay.sofa.jraft.option.NodeOptions;
 import com.alipay.sofa.jraft.entity.PeerId;
+import com.alipay.sofa.jraft.option.NodeOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

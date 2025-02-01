@@ -1,14 +1,13 @@
 package com.example.worker.netty;
 
 import com.alipay.sofa.jraft.Closure;
-import com.alipay.sofa.jraft.entity.Task;
 import com.alipay.sofa.jraft.Status;
-import com.example.worker.JRaftServerHolder;
+import com.alipay.sofa.jraft.entity.Task;
 import com.example.worker.JRaftServer;
+import com.example.worker.JRaftServerHolder;
 import com.example.worker.KeyFrequencyStateMachine;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
