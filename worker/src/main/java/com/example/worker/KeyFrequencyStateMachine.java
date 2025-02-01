@@ -46,7 +46,7 @@ public class KeyFrequencyStateMachine implements StateMachine {
     /**
      * 反序列化 ByteBuffer 为 ConcurrentHashMap 并与 freqMap 合并
      */
-    private static void mergeWithFreqMap(ByteBuffer buffer, ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> freqMap) {
+    private void mergeWithFreqMap(ByteBuffer buffer, ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> freqMap) {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(buffer.array());
              ObjectInputStream ois = new ObjectInputStream(bis)) {
             // 反序列化数据
@@ -57,6 +57,8 @@ public class KeyFrequencyStateMachine implements StateMachine {
             for (Map.Entry<String, ConcurrentLinkedQueue<Long>> entry : deserializedMap.entrySet()) {
                 ConcurrentLinkedQueue<Long> queue = freqMap.computeIfAbsent(entry.getKey(), k -> new ConcurrentLinkedQueue<>());
                 queue.addAll(entry.getValue());  // 合并 Queue<Long> 到 freqMap
+                long currentTime = System.currentTimeMillis();
+                cleanUp(entry.getKey(), currentTime);
             }
         } catch (IOException | ClassNotFoundException e) {
             throw new RuntimeException("Failed to deserialize and merge freqMap", e);
