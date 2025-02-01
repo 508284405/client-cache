@@ -13,26 +13,53 @@ import com.example.worker.util.FilePersistenceUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class KeyFrequencyStateMachine implements StateMachine {
     private static final Logger LOG = LoggerFactory.getLogger(KeyFrequencyStateMachine.class);
 
-    // 维护Key->访问次数
-    private final ConcurrentHashMap<String, Long> freqMap = new ConcurrentHashMap<>();
+    // key -> 访问时间队列
+    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> freqMap = new ConcurrentHashMap<>();
+
+    // 滑动窗口时间（毫秒）
+    private static final long WINDOW_SIZE_MS = 300000;
 
     @Override
     public void onApply(Iterator iter) {
         while (iter.hasNext()) {
             ByteBuffer data = iter.getData();
             if (data != null) {
-                String key = new String(data.array(), StandardCharsets.UTF_8);
-                // 更新本地计数
-                freqMap.merge(key, 1L, Long::sum);
+                // 反序列化data为ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>>，并与freqMap合并; 更新本地计数
+                mergeWithFreqMap(data,freqMap);
             }
             iter.next();
+        }
+    }
+
+
+    /**
+     * 反序列化 ByteBuffer 为 ConcurrentHashMap 并与 freqMap 合并
+     */
+    private static void mergeWithFreqMap(ByteBuffer buffer, ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> freqMap) {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(buffer.array());
+             ObjectInputStream ois = new ObjectInputStream(bis)) {
+            // 反序列化数据
+            @SuppressWarnings("unchecked")
+            ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> deserializedMap = (ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>>) ois.readObject();
+
+            // 合并到 freqMap
+            for (Map.Entry<String, ConcurrentLinkedQueue<Long>> entry : deserializedMap.entrySet()) {
+                ConcurrentLinkedQueue<Long> queue = freqMap.computeIfAbsent(entry.getKey(), k -> new ConcurrentLinkedQueue<>());
+                queue.addAll(entry.getValue());  // 合并 Queue<Long> 到 freqMap
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("Failed to deserialize and merge freqMap", e);
         }
     }
 
@@ -59,7 +86,7 @@ public class KeyFrequencyStateMachine implements StateMachine {
     public boolean onSnapshotLoad(SnapshotReader reader) {
         try {
             String snapshotPath = reader.getPath() + "/freqMap.snapshot";
-            ConcurrentHashMap<String, Long> loaded = FilePersistenceUtil.loadFreqMapFromFile(snapshotPath);
+            ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> loaded = FilePersistenceUtil.loadFreqMapFromFile(snapshotPath);
             if (loaded != null) {
                 freqMap.clear();
                 freqMap.putAll(loaded);
@@ -101,12 +128,37 @@ public class KeyFrequencyStateMachine implements StateMachine {
         LOG.info("Start following {}", context.getLeaderId());
     }
 
-    // 手动更新Key次数(用于Follower本地临时累计)
+    /**
+     * 手动更新Key次数(用于Follower本地临时累计)
+     * @param key key
+     */
     public void applyKeyLocally(String key) {
-        freqMap.merge(key, 1L, Long::sum);
+        long currentTime = System.currentTimeMillis();
+        freqMap.computeIfAbsent(key, k -> new ConcurrentLinkedQueue<>()).add(currentTime);
+        cleanUp(key, currentTime);
     }
 
-    public ConcurrentHashMap<String, Long> getFreqMap() {
+    /**
+     * 清理窗口外的数据
+     */
+    private void cleanUp(String key, long currentTime) {
+        ConcurrentLinkedQueue<Long> queue = freqMap.get(key);
+        if (queue == null) return;
+
+        while (!queue.isEmpty() && queue.peek() < (currentTime - WINDOW_SIZE_MS)) {
+            queue.poll(); // 移除过期数据
+        }
+    }
+
+    /**
+     * 获取当前窗口内的访问次数
+     */
+    public int getFrequency(String key) {
+        ConcurrentLinkedQueue<Long> queue = freqMap.get(key);
+        return queue == null ? 0 : queue.size();
+    }
+
+    public ConcurrentHashMap<String, ConcurrentLinkedQueue<Long>> getFreqMap() {
         return freqMap;
     }
 }
