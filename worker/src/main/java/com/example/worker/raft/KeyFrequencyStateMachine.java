@@ -1,4 +1,4 @@
-package com.example.worker;
+package com.example.worker.raft;
 
 import com.alipay.sofa.jraft.Closure;
 import com.alipay.sofa.jraft.Iterator;

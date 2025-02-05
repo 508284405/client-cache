@@ -3,3 +3,9 @@ spring:
     name: worker
 server:
   port: 8081
+
+nettyPort: 9002
+serverId: 127.0.0.1:8082
+dataPath: /Users/wangyu/App/javaproduct/spring-cache-client/worker/data2
+groupId: hotspotGroup
+initialConf: 127.0.0.1:8081,127.0.0.1:8082

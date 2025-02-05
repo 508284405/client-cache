@@ -1,9 +1,13 @@
-package com.example.worker;
+package com.example.worker.task;
 
 import com.alipay.sofa.jraft.entity.Task;
+import com.example.worker.raft.JRaftServer;
+import com.example.worker.raft.JRaftServerHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -17,14 +21,24 @@ import java.util.concurrent.TimeUnit;
 /**
  * Follower -> Leader 上报任务
  */
+@Component
 public class FollowerReportTask {
     private static final Logger LOG = LoggerFactory.getLogger(FollowerReportTask.class);
     private static final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    private final JRaftServerHolder jRaftServerHolder;
 
-    public static void startSchedule() {
+    public FollowerReportTask(JRaftServerHolder jRaftServerHolder) {
+        this.jRaftServerHolder = jRaftServerHolder;
+    }
+
+    /**
+     * 启动Follower->Leader上报任务 & Leader/Follower持久化任务
+     */
+    @PostConstruct
+    public void startSchedule() {
         executor.scheduleAtFixedRate(() -> {
             try {
-                JRaftServer server = JRaftServerHolder.getServer();
+                JRaftServer server = jRaftServerHolder.getServer();
                 if (server == null) return;
 
                 // 如果自己是Follower，就把 freqMap 数据上报给Leader
